@@ -1,0 +1,120 @@
+MusicDupes
+==========
+
+Findet doppelte Musikdateien anhand ihres KLANGS - nicht anhand der Tags.
+Erkennt denselben Track quer über Formate und Bitraten hinweg und zeigt,
+welche der Dateien die bessere ist.
+
+
+LOSLEGEN
+--------
+
+1. Diesen Ordner irgendwohin entpacken.
+2. MusicDupes.exe doppelklicken.
+3. Ordner mit deiner Musik wählen, "Scan starten".
+
+Keine Installation, kein Python, kein ffmpeg nötig - alles steckt hier drin.
+Läuft auch von einem USB-Stick.
+
+WICHTIG - diese zwei Punkte ersparen Ärger:
+
+1. ZIP VOR dem Entpacken entsperren.
+   Rechtsklick auf die ZIP-Datei -> Eigenschaften -> unten "Zulassen"
+   ankreuzen -> OK. Erst danach entpacken.
+
+   Windows markiert heruntergeladene Dateien, und diese Markierung
+   überträgt sich beim Entpacken auf jede einzelne Datei. Entsperrt man
+   vorher, bleibt die SmartScreen-Warnung meist aus.
+
+2. Erst entpacken, dann starten.
+   Startet man die EXE direkt aus dem ZIP heraus, fehlt ihr alles Übrige
+   und sie läuft nicht.
+
+Die Sprache richtet sich nach Windows: Deutsch auf deutschsprachigen
+Systemen, sonst Englisch. Umstellen lässt sie sich im Menü "Sprache".
+
+Kommt trotzdem "Der Computer wurde durch Windows geschützt": Das heißt
+nicht, dass in der Datei etwas gefunden wurde. Windows zeigt die Meldung bei
+Programmen, die es noch selten gesehen hat. Weiter über "Weitere
+Informationen" -> "Trotzdem ausführen". Zu jeder Veröffentlichung gibt es
+eine SHA-256-Prüfsumme, mit der sich der Download prüfen lässt.
+
+MusicDupes VERÄNDERT UND LÖSCHT NICHTS. Es zeigt nur an. Löschen musst du
+selbst, im Explorer.
+
+
+DIE DREI REITER
+---------------
+
+Duplikate        Die gefundenen Gruppen. Der mit * markierte, grün
+                 hinterlegte Eintrag ist der Vorschlag zum Behalten.
+                 "Gleicher Titel, andere Aufnahme" heißt: andere Fassung
+                 (Remix, Live, Radio Edit) - die bitte selbst prüfen.
+
+Paarvergleich    Jedes Dateipaar einzeln, mit zwei Zahlen:
+                 "Deckung" misst am kürzeren Track, "Ähnlichkeit" am
+                 längeren. Ein Original von 3:51 in seinem Extended Mix
+                 von 6:32 hat hohe Deckung, aber nur mittlere Ähnlichkeit -
+                 es steckt komplett drin, der Extended hat nur viel mehr.
+
+Dateiqualität    Alle Dateien mit einem Balken von rot nach grün: Eignung
+                 für eine große Anlage. Sortierbar nach jeder Spalte,
+                 filterbar nach Format und Bewertung.
+
+
+DER WICHTIGSTE HINWEIS
+----------------------
+
+Die Spalte "Bandbreite" wird am Ton GEMESSEN, nicht aus den Tags gelesen:
+
+  15-16 kHz    entspricht etwa  96-128 kbps
+  19-20 kHz    entspricht etwa 256-320 kbps
+  über 20 kHz                  verlustfrei oder sehr hohe Bitrate
+
+Steht bei einer FLAC oder WAV "Transcode-Verdacht", wurde sie sehr
+wahrscheinlich aus einer MP3 erzeugt. Sie belegt den Platz einer
+verlustfreien Datei und klingt trotzdem wie das MP3, aus dem sie stammt. In
+diesem Fall ist die GRÖSSERE Datei die schlechtere - das sieht man weder an
+der Endung noch an der Dateigröße.
+
+
+WO STEHT WAS
+------------
+
+Jede Spaltenüberschrift erklärt sich, wenn man mit der Maus darauf zeigt.
+Dasselbe gilt für die Trefferart jeder Zeile. Die kleinen ⓘ-Symbole erklären
+die beiden Regler und das Verfahren.
+
+Ausführlicher: Menü "Hilfe" -> "Wie die Erkennung funktioniert".
+
+
+DER ORDNER data
+---------------
+
+Entsteht beim ersten Start neben der EXE und enthält die gespeicherten
+Analysen und deine Einstellungen. Dadurch dauert jeder weitere Scan nur noch
+einen Bruchteil der Zeit.
+
+Er liegt bewusst hier und nicht irgendwo im Benutzerprofil - so wandert beim
+Kopieren des Ordners alles mit. Löschen ist gefahrlos, dann dauert der
+nächste Scan wieder so lange wie der erste.
+
+Liegt der Ordner an einer Stelle, an der Windows kein Schreiben erlaubt
+(etwa unter "Programme"), landet data stattdessen unter
+%LOCALAPPDATA%\MusicDupes.
+
+
+LIZENZEN
+--------
+
+MusicDupes selbst steht unter der MIT-Lizenz (LICENSE).
+
+Mitgeliefert werden außerdem Qt und ffmpeg (https://ffmpeg.org), beide unter
+der GNU Lesser General Public License v3. Sie liegen unverändert als
+einzelne Dateien bei und dürfen durch andere kompatible Fassungen ersetzt
+werden. Die Lizenztexte stehen im Ordner licenses (LGPL-3.0 und die GPL-3.0,
+auf der sie aufbaut) und unter ffmpeg\LICENSE.txt; sie müssen beiliegen,
+wenn dieses Paket weitergegeben wird. Einzelheiten: THIRD-PARTY-LICENSES.md.
+Den Quellcode von ffmpeg gibt es unter https://ffmpeg.org/download.html.
+
+MusicDupes selbst ruft ffmpeg nur als eigenständiges Programm auf.

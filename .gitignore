@@ -1,0 +1,34 @@
+# Build-Ergebnisse
+/build/
+/dist/
+/dist-single/
+*.spec.bak
+MusicDupes-Portable.zip
+MusicDupes.exe
+MusicDupes.msix
+*.sha256
+
+# Laufzeitdaten: Analyse-Cache und Einstellungen
+/data/
+
+# Virtuelle Umgebung
+/.venv/
+/venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Mitgeliefertes ffmpeg (wird beim Bauen geholt, nicht versioniert)
+/ffmpeg/
+
+# Editoren und Betriebssystem
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini

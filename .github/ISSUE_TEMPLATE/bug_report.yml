@@ -1,0 +1,59 @@
+name: Bug report
+description: Something does not work as described
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. MusicDupes never modifies your files, so
+        nothing you report here can have damaged a collection.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Scan folder X
+        2. Set the acoustic threshold to Y
+        3. ...
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes:
+      label: MusicDupes version
+      description: From the release you downloaded, or the commit you built.
+    validations: {required: true}
+  - type: dropdown
+    id: howrun
+    attributes:
+      label: How are you running it?
+      options:
+        - Single file (MusicDupes.exe from Releases)
+        - Portable ZIP (MusicDupes-Portable.zip)
+        - From source (MusicDupes.bat)
+        - Command line (--cli)
+    validations: {required: true}
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+  - type: textarea
+    id: files
+    attributes:
+      label: Affected files
+      description: >
+        Format, bit rate, sample rate and length of the files involved - the
+        "File quality" tab shows all of it. Please do not upload music.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: "Portable ZIP only: I unblocked the ZIP before extracting (right-click → Properties → Unblock)"
+        - label: I checked the column tooltips - the behaviour is not explained there

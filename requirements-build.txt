@@ -1,0 +1,7 @@
+# Exakt die Versionen, mit denen die Releases gebaut und getestet werden.
+# requirements.txt bleibt bewusst offen (zum Mitentwickeln); hier dagegen
+# soll ein neues Release von numpy, PySide6 oder PyInstaller nicht
+# unbemerkt in eine Veroeffentlichung rutschen.
+numpy==2.5.3
+PySide6==6.11.2
+pyinstaller==6.22.2

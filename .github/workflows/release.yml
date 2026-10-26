@@ -1,0 +1,327 @@
+name: Build portable release
+
+# Builds both deliveries - the single MusicDupes.exe and the portable ZIP.
+# On a version tag they are attached to a GitHub release; on a normal push
+# they are kept as artifacts so breakage shows up before a release, not
+# during one.
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: building needs to read only. The one step that writes -
+# publishing the release - runs in its own job further down.
+permissions:
+  contents: read
+
+env:
+  # BtbN rebuilds "latest" daily, so this is a moving pointer, not a pin.
+  # Which archive actually went into a release is recorded together with its
+  # SHA-256 in ffmpeg\ORIGIN.txt inside the package. To pin a release, set
+  # the repository variables FFMPEG_URL (a dated autobuild) and
+  # FFMPEG_SHA256 - the download is then verified against that checksum.
+  FFMPEG_URL: ${{ vars.FFMPEG_URL || 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl-shared.zip' }}
+  FFMPEG_SHA256: ${{ vars.FFMPEG_SHA256 }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      # The SignPath action reads job details and downloads the artifact.
+      actions: read
+    outputs:
+      signed: ${{ steps.signing.outputs.enabled }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The same Python as the local builds the releases are tested with.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install pinned build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      # Bei einem Tag muss er zur Versionsnummer im Programm passen - sonst
+      # stuende in der EXE eine andere Version als am Release, und SignPath
+      # verweigerte die Signatur.
+      - name: Check tag against program version
+        id: version
+        shell: pwsh
+        run: |
+          $app = (Select-String -Path musicdupes\__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          "version=$app" >> $env:GITHUB_OUTPUT
+          $ref = "${{ github.ref }}"
+          if ($ref.StartsWith("refs/tags/v")) {
+            $tag = $ref.Substring("refs/tags/v".Length)
+            if ($tag -ne $app) {
+              Write-Error "Tag v$tag does not match __version__ = $app in musicdupes/__init__.py"
+              exit 1
+            }
+          }
+          Write-Host "Version: $app"
+
+      - name: Fetch FFmpeg (LGPL build)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile ffmpeg.zip
+          $hash = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          Write-Host "FFmpeg archive SHA-256: $hash"
+          if ($env:FFMPEG_SHA256 -and $hash -ne $env:FFMPEG_SHA256.ToLower()) {
+            Write-Error "FFmpeg archive does not match FFMPEG_SHA256."
+            exit 1
+          }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-dl
+          New-Item -ItemType Directory -Force ffmpeg | Out-Null
+          $bin = Get-ChildItem ffmpeg-dl -Recurse -Directory -Filter bin |
+                 Select-Object -First 1
+          Get-ChildItem "$($bin.FullName)\*" -Include *.exe,*.dll |
+            Where-Object { $_.Name -notlike "ffplay*" } |
+            Copy-Item -Destination ffmpeg
+          $lic = Get-ChildItem ffmpeg-dl -Recurse -Filter LICENSE.txt |
+                 Select-Object -First 1
+          Copy-Item $lic.FullName ffmpeg\LICENSE.txt
+          "FFmpeg (LGPL v3 shared build)`r`nSource: $env:FFMPEG_URL`r`nArchive SHA-256: $hash`r`nUnmodified. Sources: https://ffmpeg.org/download.html" |
+            Set-Content ffmpeg\ORIGIN.txt -Encoding utf8
+
+      # Catches the mistake that would quietly relicense the whole package.
+      - name: Verify FFmpeg is not a GPL build
+        shell: pwsh
+        run: |
+          $banner = & .\ffmpeg\ffmpeg.exe -version 2>&1 | Out-String
+          if ($banner -match '--enable-gpl' -or $banner -match '--enable-nonfree') {
+            Write-Error "FFmpeg build is GPL or nonfree - that would relicense the package."
+            exit 1
+          }
+          Write-Host "OK: LGPL build."
+
+      # Erst bauen, noch nicht packen: dazwischen wird die EXE signiert.
+      - name: Build both deliveries
+        run: python build_portable.py --no-zip
+
+      # --- Code signing -------------------------------------------------
+      #
+      # SignPath Foundation signiert Open-Source-Projekte kostenlos. Ihr
+      # Zertifikat wird von vielen Projekten geteilt und hat dadurch bereits
+      # SmartScreen-Reputation - ein frisch gekauftes Zertifikat haette die
+      # nicht und wuerde die Warnung erst nach vielen Downloads loswerden.
+      #
+      # Laeuft nur bei Tags und nur, wenn der Zugang hinterlegt ist. Ohne
+      # das bleibt die EXE unsigniert und alles andere funktioniert weiter.
+      - name: Check for signing credentials
+        id: signing
+        shell: pwsh
+        run: |
+          $ready = [bool]($env:TOKEN -and $env:ORG -and $env:PROJECT -and $env:POLICY)
+          $tag = "${{ github.ref }}".StartsWith("refs/tags/v")
+          "enabled=$(($ready -and $tag).ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          if (-not $ready) { Write-Host "No SignPath credentials - unsigned build." }
+          elseif (-not $tag) { Write-Host "Not a tag - skipping signing." }
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          PROJECT: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          POLICY: ${{ vars.SIGNPATH_POLICY_SLUG }}
+
+      # Beide Auslieferungsformen werden signiert: die EXE im Ordner und
+      # die Einzeldatei. Sie entstehen aus demselben Quellstand, sind aber
+      # verschiedene Dateien und brauchen je eine eigene Signatur.
+      - name: Upload executables for signing
+        if: steps.signing.outputs.enabled == 'true'
+        id: unsigned
+        uses: actions/upload-artifact@v7
+        with:
+          name: MusicDupes-unsigned
+          path: |
+            dist/MusicDupes/MusicDupes.exe
+            dist-single/MusicDupes.exe
+          retention-days: 1
+
+      # Jede Signatur muss in SignPath von Hand freigegeben werden. Eine
+      # Stunde Wartezeit statt der voreingestellten zehn Minuten.
+      - name: Submit signing request to SignPath
+        if: steps.signing.outputs.enabled == 'true'
+        uses: SignPath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+          # Gegen diesen Wert prueft SignPath die Produktversion in der EXE.
+          parameters: |
+            version: "${{ steps.version.outputs.version }}"
+
+      - name: Put the signed executables back
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        run: |
+          # Der Upload hat die Ordnerstruktur erhalten, also kommen beide
+          # Dateien an ihren jeweiligen Platz zurueck.
+          $pairs = @(
+            @{ From = "signed\dist\MusicDupes\MusicDupes.exe"; To = "dist\MusicDupes\MusicDupes.exe" },
+            @{ From = "signed\dist-single\MusicDupes.exe";      To = "dist-single\MusicDupes.exe" }
+          )
+          foreach ($pair in $pairs) {
+            if (-not (Test-Path $pair.From)) {
+              Write-Error "Missing signed file: $($pair.From)"; exit 1
+            }
+            Copy-Item $pair.From $pair.To -Force
+            $sig = Get-AuthenticodeSignature $pair.To
+            "$($pair.To): $($sig.Status) - $($sig.SignerCertificate.Subject)"
+            if ($sig.Status -ne 'Valid') { Write-Error "Signature invalid"; exit 1 }
+          }
+
+      # A real scan with both executables. Start-Process -Wait is essential:
+      # MusicDupes.exe is a windowed program, and PowerShell does not wait
+      # for those when they are called directly - the test would check the
+      # result before the scan had even started.
+      - name: Smoke test both executables
+        shell: pwsh
+        run: |
+          $folder = Join-Path $PWD "smoketest"
+          New-Item -ItemType Directory -Force $folder | Out-Null
+          & .\ffmpeg\ffmpeg.exe -v error -y -f lavfi `
+            -i "aevalsrc=0.3*sin(2*PI*440*t)+0.2*sin(2*PI*660*t):s=44100:d=12" `
+            -ac 2 (Join-Path $folder "tone.wav")
+          Copy-Item (Join-Path $folder "tone.wav") (Join-Path $folder "tone-copy.wav")
+
+          foreach ($exe in @("dist\MusicDupes\MusicDupes.exe", "dist-single\MusicDupes.exe")) {
+            $exe = (Resolve-Path $exe).Path
+            $data = Join-Path (Split-Path $exe) "data"
+            $csv = Join-Path $env:RUNNER_TEMP "smoketest.csv"
+            if (Test-Path $data) { Remove-Item -Recurse -Force $data }
+            if (Test-Path $csv) { Remove-Item -Force $csv }
+
+            $p = Start-Process -FilePath $exe -Wait -PassThru `
+                 -ArgumentList @("--cli", "`"$folder`"", "--csv", "`"$csv`"", "--lang", "en")
+            if ($p.ExitCode -ne 0) { Write-Error "$exe exited with $($p.ExitCode)"; exit 1 }
+            if (-not (Test-Path (Join-Path $data "cache.db"))) {
+              Write-Error "$exe wrote no cache - the worker processes did not run."; exit 1
+            }
+            # The two identical files must come out as one group.
+            $rows = @(Import-Csv $csv -Delimiter ';')
+            if ($rows.Count -lt 2) { Write-Error "$exe found no duplicate group."; exit 1 }
+            Write-Host "OK: $exe scans and groups ($($rows.Count) rows)."
+            Remove-Item -Recurse -Force $data
+          }
+
+      - name: Pack the ZIP and stage the single file
+        shell: pwsh
+        run: |
+          python build_portable.py --zip-only
+          Copy-Item dist-single\MusicDupes.exe MusicDupes.exe -Force
+          Copy-Item dist-single\MusicDupes.exe.sha256 MusicDupes.exe.sha256 -Force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MusicDupes-Release
+          path: |
+            MusicDupes.exe
+            MusicDupes.exe.sha256
+            MusicDupes-Portable.zip
+            MusicDupes-Portable.zip.sha256
+          retention-days: 14
+
+      # The Store package. Built from the same dist folder, just wrapped
+      # differently. Partner Center signs it after certification, which is
+      # the only distribution route with no SmartScreen prompt at all.
+      #
+      # Identity and publisher come from repository variables so they are
+      # not baked into the repo; without them an unsigned test package is
+      # produced, which still proves the layout and manifest are valid.
+      - name: Build MSIX for the Microsoft Store
+        shell: pwsh
+        run: |
+          $msixArgs = @()
+          if ($env:STORE_IDENTITY)  { $msixArgs += @("--identity", $env:STORE_IDENTITY) }
+          if ($env:STORE_PUBLISHER) { $msixArgs += @("--publisher", $env:STORE_PUBLISHER) }
+          if ($env:STORE_DISPLAY)   { $msixArgs += @("--publisher-display", $env:STORE_DISPLAY) }
+          $tag = "${{ github.ref_name }}"
+          if ($tag -match '^v(\d+)\.(\d+)\.(\d+)$') {
+            $msixArgs += @("--version", "$($Matches[1]).$($Matches[2]).$($Matches[3]).0")
+          }
+          python packaging/build_msix.py @msixArgs
+        env:
+          STORE_IDENTITY: ${{ vars.STORE_IDENTITY }}
+          STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          STORE_DISPLAY: ${{ vars.STORE_DISPLAY }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MusicDupes-MSIX
+          path: MusicDupes.msix
+          retention-days: 14
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: MusicDupes-Release
+          path: release
+
+      # Whether this release is signed decides what the notes may claim.
+      - name: Write release notes
+        shell: bash
+        env:
+          SIGNED: ${{ needs.build.outputs.signed }}
+        run: |
+          repo="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          {
+            echo "## Download"
+            echo
+            echo "**\`MusicDupes.exe\`** — one file, double-click, done. No installation,"
+            echo "no extraction, nothing to set up. Runs from a USB stick too."
+            echo
+            echo "\`MusicDupes-Portable.zip\` is the same program as a folder. It starts"
+            echo "about a second faster and lets you replace the bundled Qt and FFmpeg"
+            echo "libraries, which the LGPL entitles you to."
+            echo
+            echo "Either way MusicDupes **changes and deletes nothing** — it only shows"
+            echo "you what is there."
+            echo
+            echo "*Deutsch:* \`MusicDupes.exe\` herunterladen und doppelklicken — fertig."
+            echo "Keine Installation. MusicDupes verändert und löscht nichts."
+            echo
+            echo "### If Windows warns you"
+            echo
+            if [ "$SIGNED" = "true" ]; then
+              echo "Both executables are code-signed, so this should not happen. If it"
+              echo "does, the dialog does not mean anything was found in the file:"
+              echo "click *More info → Run anyway*."
+              echo
+              echo "Free code signing provided by [SignPath.io](https://about.signpath.io/),"
+              echo "certificate by [SignPath Foundation](https://signpath.org/)."
+              echo "See the [code signing policy]($repo/blob/main/docs/code-signing-policy.md)."
+            else
+              echo "This release is not code-signed yet, so Windows may show"
+              echo "*Windows protected your PC*. That dialog does not mean anything was"
+              echo "found in the file — Windows shows it for programs it has not seen"
+              echo "often. Click *More info → Run anyway*."
+            fi
+            echo
+            echo "The SHA-256 files let you verify your download. This release was"
+            echo "built by GitHub Actions from the tagged source in this repository."
+          } > notes.md
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          body_path: notes.md
+          generate_release_notes: true

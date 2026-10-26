@@ -1,0 +1,40 @@
+name: Wrong match
+description: Two tracks were grouped that do not belong together, or a duplicate was missed
+labels: ["detection"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These reports are the most valuable ones. The false-positive rate has
+        only been measured on a small synthetic test set, so real-world cases
+        are what improves the thresholds.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which way round?
+      options:
+        - Two different tracks were grouped together (false positive)
+        - A real duplicate was not found (false negative)
+    validations: {required: true}
+  - type: input
+    id: threshold
+    attributes:
+      label: Acoustic threshold setting
+      placeholder: "90 %"
+    validations: {required: true}
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Numbers from the Pair comparison tab
+      description: Coverage, similarity, offset and the match type for the pair.
+      placeholder: |
+        Coverage 94 %, similarity 52 %, offset +44.7 s, type "Same recording"
+    validations: {required: true}
+  - type: textarea
+    id: tracks
+    attributes:
+      label: What are the two tracks?
+      description: >
+        Artist, title, version, plus format, bit rate, bandwidth and length
+        for both. Please do not upload music.
+    validations: {required: true}

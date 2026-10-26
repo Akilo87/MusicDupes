@@ -1,0 +1,10 @@
+# Einheitliche Zeilenenden im Repository, egal mit welchem Editor bearbeitet.
+* text=auto
+
+# cmd.exe verarbeitet Sprungmarken in Batch-Dateien nur mit CRLF zuverlaessig.
+*.bat text eol=crlf
+
+# Binaerdateien nie anfassen.
+*.ico binary
+*.png binary
+*.zip binary
