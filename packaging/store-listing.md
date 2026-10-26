@@ -98,7 +98,7 @@ later scan takes seconds.
 MusicDupes never modifies or deletes anything. It shows you what is there -
 deleting stays your decision.
 
-Free and open source: https://github.com/USERNAME/MusicDupes
+Free and open source: https://github.com/Akilo87/MusicDupes
 ```
 
 **Features** (bullet list field)
@@ -176,7 +176,7 @@ werden zwischengespeichert, jeder weitere Durchlauf dauert Sekunden.
 MusicDupes veraendert und loescht nichts. Es zeigt, was da ist - geloescht
 wird nach deiner Entscheidung.
 
-Kostenlos und quelloffen: https://github.com/USERNAME/MusicDupes
+Kostenlos und quelloffen: https://github.com/Akilo87/MusicDupes
 ```
 
 **Features**
